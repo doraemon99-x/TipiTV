@@ -1,0 +1,3 @@
+-keep class id.tipime.tv.data.model.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*

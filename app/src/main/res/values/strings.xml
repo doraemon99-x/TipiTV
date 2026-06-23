@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TipiTV</string>
+    <string name="settings">Settings</string>
+    <string name="playlist_source">Playlist Source</string>
+    <string name="playlist_source_summary">URL or local file path</string>
+    <string name="auto_boot">Auto play on boot</string>
+    <string name="auto_boot_summary">Launch app when device starts</string>
+</resources>

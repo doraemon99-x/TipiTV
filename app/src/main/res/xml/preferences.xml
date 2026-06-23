@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <EditTextPreference
+        android:key="playlist_source"
+        android:title="@string/playlist_source"
+        android:summary="@string/playlist_source_summary"
+        android:dialogTitle="Playlist URL or path"
+        app:useSimpleSummaryProvider="true" />
+    <SwitchPreferenceCompat
+        android:key="auto_boot"
+        android:title="@string/auto_boot"
+        android:summary="@string/auto_boot_summary"
+        android:defaultValue="false" />
+</PreferenceScreen>

@@ -1,0 +1,47 @@
+name: Build TipiTV APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Sign APK
+        run: |
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          $ANDROID_HOME/build-tools/34.0.0/zipalign -v -p 4 $APK app/build/outputs/apk/release/aligned.apk
+          keytool -genkey -v -keystore tiptv.jks -alias tipitv \
+            -keyalg RSA -keysize 2048 -validity 3650 \
+            -dname "CN=TipiTV, O=TipiMe, C=ID" \
+            -storepass tipime123 -keypass tipime123 -noprompt
+          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+            --ks tiptv.jks \
+            --ks-pass pass:tipime123 \
+            --key-pass pass:tipime123 \
+            --out app/build/outputs/apk/release/TipiTV-signed.apk \
+            app/build/outputs/apk/release/aligned.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TipiTV-release
+          path: app/build/outputs/apk/release/TipiTV-signed.apk

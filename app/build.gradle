@@ -1,0 +1,89 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.parcelize'
+}
+
+android {
+    namespace 'id.tipime.tv'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "id.tipime.tv"
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            applicationVariants.all { variant ->
+                variant.outputs.all {
+                    outputFileName = "TipiTV_v${defaultConfig.versionName}_b${defaultConfig.versionCode}.apk"
+                }
+            }
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    buildFeatures {
+        viewBinding true
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.activity:activity-ktx:1.8.2'
+    implementation 'androidx.fragment:fragment-ktx:1.6.2'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.multidex:multidex:2.0.1'
+
+    // Material Design 3
+    implementation 'com.google.android.material:material:1.11.0'
+
+    // ViewModel + LiveData
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+
+    // Media3 - HLS, DASH, RTSP, DRM
+    implementation 'androidx.media3:media3-exoplayer:1.3.0'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.3.0'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.3.0'
+    implementation 'androidx.media3:media3-exoplayer-rtsp:1.3.0'
+    implementation 'androidx.media3:media3-ui:1.3.0'
+    implementation 'androidx.media3:media3-common:1.3.0'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.3.0'
+
+    // OkHttp
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // Gson
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Coil
+    implementation 'io.coil-kt:coil:2.5.0'
+
+    // Leanback (Android TV)
+    implementation 'androidx.leanback:leanback:1.0.0'
+
+    testImplementation 'junit:junit:4.13.2'
+}
