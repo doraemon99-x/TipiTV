@@ -36,6 +36,7 @@ private const val TAG = "PlayerManager"
 class PlayerManager(private val context: Context) {
 
     private var exoPlayer: ExoPlayer? = null
+    private var attachedPlayerView: PlayerView? = null
     private var currentChannel: Channel? = null
     private var currentPlaylist: Playlist? = null
     private var retryCount = 0
@@ -54,8 +55,9 @@ class PlayerManager(private val context: Context) {
         .build()
 
     fun attachView(playerView: PlayerView) {
-        playerView.player = exoPlayer
+        attachedPlayerView = playerView
         playerView.keepScreenOn = true
+        playerView.player = exoPlayer
     }
 
     fun play(channel: Channel, playlist: Playlist) {
@@ -106,6 +108,11 @@ class PlayerManager(private val context: Context) {
             .build()
             .also { player ->
                 player.addListener(playerListener)
+
+                // PlayerView awalnya di-attach saat ExoPlayer masih null.
+                // Attach ulang setiap player baru dibuat (pindah channel/retry).
+                attachedPlayerView?.player = player
+
                 player.setMediaSource(mediaSource)
                 player.prepare()
                 player.playWhenReady = true
@@ -340,6 +347,7 @@ class PlayerManager(private val context: Context) {
 
     private fun releasePlayerOnly() {
         handler.removeCallbacksAndMessages(null)
+        attachedPlayerView?.player = null
         exoPlayer?.removeListener(playerListener)
         exoPlayer?.release()
         exoPlayer = null
