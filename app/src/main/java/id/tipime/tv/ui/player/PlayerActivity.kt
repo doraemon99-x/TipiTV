@@ -8,27 +8,19 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import id.tipime.tv.data.model.PlayData
 import id.tipime.tv.data.model.Playlist
-import id.tipime.tv.data.repository.PlaylistRepository
 import id.tipime.tv.databinding.ActivityPlayerBinding
-import id.tipime.tv.player.PlayerHelper
+import id.tipime.tv.player.PlayerManager
+import id.tipime.tv.util.PlaylistCache
 import id.tipime.tv.util.Prefs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @UnstableApi
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPlayerBinding
-    private var player: ExoPlayer? = null
+    private lateinit var playerManager: PlayerManager
     private var playlist: Playlist? = null
     private var currentCatIdx = 0
     private var currentChIdx = 0
@@ -52,44 +44,47 @@ class PlayerActivity : AppCompatActivity() {
         currentCatIdx = playData?.categoryIndex ?: 0
         currentChIdx = playData?.channelIndex ?: 0
 
-        loadAndPlay()
-    }
-
-    private fun loadAndPlay() {
-        binding.progressBar.visibility = View.VISIBLE
-        CoroutineScope(Dispatchers.IO).launch {
-            val repo = PlaylistRepository(applicationContext)
-            repo.loadPlaylist().onSuccess { pl ->
-                playlist = pl
-                withContext(Dispatchers.Main) {
-                    initPlayer()
-                    playChannel(currentCatIdx, currentChIdx)
-                }
-            }.onFailure {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@PlayerActivity, "Failed to load playlist", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
+        playerManager = PlayerManager(this).also { pm ->
+            pm.onBuffering = { buffering ->
+                binding.progressBar.visibility = if (buffering) View.VISIBLE else View.GONE
             }
+            pm.onError = { msg ->
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            }
+            pm.onReady = {
+                // bisa tambah animasi atau log di sini
+            }
+            pm.attachView(binding.playerView)
+        }
+
+        // Gunakan PlaylistCache supaya tidak load ulang dari disk
+        val cached = PlaylistCache.get()
+        if (cached != null) {
+            playlist = cached
+            playChannel(currentCatIdx, currentChIdx)
+        } else {
+            binding.progressBar.visibility = View.VISIBLE
+            // fallback load dari repo
+            loadPlaylistAndPlay()
         }
     }
 
-    private fun initPlayer() {
-        player = PlayerHelper.buildPlayer(this).also {
-            binding.playerView.player = it
-            it.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    binding.progressBar.visibility =
-                        if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+    private fun loadPlaylistAndPlay() {
+        val repo = id.tipime.tv.data.repository.PlaylistRepository(applicationContext)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            repo.loadPlaylist().onSuccess { pl ->
+                PlaylistCache.set(pl)
+                playlist = pl
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    binding.progressBar.visibility = View.GONE
+                    playChannel(currentCatIdx, currentChIdx)
                 }
-                override fun onPlayerError(error: PlaybackException) {
-                    Toast.makeText(
-                        this@PlayerActivity,
-                        "Error: ${error.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+            }.onFailure {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(this@PlayerActivity, "Gagal load playlist", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
-            })
+            }
         }
     }
 
@@ -102,72 +97,84 @@ class PlayerActivity : AppCompatActivity() {
         prefs.lastCategoryIndex = catIdx
         prefs.lastChannelIndex = chIdx
 
+        // tampilkan nama channel
         binding.tvChannelName.text = channel.name
         binding.tvChannelName.visibility = View.VISIBLE
+        binding.tvChannelName.removeCallbacks(hideNameRunnable)
+        binding.tvChannelName.postDelayed(hideNameRunnable, 3000)
 
-        val mediaSource = PlayerHelper.buildMediaSource(channel, pl)
-        player?.apply {
-            setMediaSource(mediaSource)
-            prepare()
-            playWhenReady = true
-        }
+        playerManager.play(channel, pl)
+    }
 
-        // auto hide channel name after 3s
-        binding.tvChannelName.postDelayed({
-            binding.tvChannelName.visibility = View.GONE
-        }, 3000)
+    private val hideNameRunnable = Runnable {
+        binding.tvChannelName.visibility = View.GONE
     }
 
     private fun navigateChannel(delta: Int) {
         val pl = playlist ?: return
         val channels = pl.categories.getOrNull(currentCatIdx)?.channels ?: return
-        val newIdx = (currentChIdx + delta + channels.size) % channels.size
-        playChannel(currentCatIdx, newIdx)
+        playChannel(currentCatIdx, (currentChIdx + delta + channels.size) % channels.size)
     }
 
     private fun navigateCategory(delta: Int) {
         val pl = playlist ?: return
-        val newCatIdx = (currentCatIdx + delta + pl.categories.size) % pl.categories.size
-        playChannel(newCatIdx, 0)
+        val newCat = (currentCatIdx + delta + pl.categories.size) % pl.categories.size
+        playChannel(newCat, 0)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                navigateChannel(-1); true
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { navigateChannel(-1); true }
+
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_MEDIA_NEXT -> { navigateChannel(1); true }
+
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_PAGE_UP,
+            KeyEvent.KEYCODE_CHANNEL_UP -> { navigateCategory(-1); true }
+
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_CHANNEL_DOWN -> { navigateCategory(1); true }
+
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER -> {
+                if (playerManager.isPlaying()) playerManager.pause()
+                else playerManager.resume()
+                true
             }
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                navigateChannel(1); true
+
+            KeyEvent.KEYCODE_INFO,
+            KeyEvent.KEYCODE_MENU -> {
+                // toggle tampilkan nama channel
+                val isVisible = binding.tvChannelName.visibility == View.VISIBLE
+                binding.tvChannelName.visibility = if (isVisible) View.GONE else View.VISIBLE
+                true
             }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_PAGE_UP -> {
-                navigateCategory(-1); true
+
+            KeyEvent.KEYCODE_BACK -> {
+                finish(); true
             }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> {
-                navigateCategory(1); true
-            }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                player?.let {
-                    if (it.isPlaying) it.pause() else it.play()
-                }; true
-            }
+
             else -> super.onKeyDown(keyCode, event)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        player?.play()
+        playerManager.resume()
     }
 
     override fun onPause() {
         super.onPause()
-        player?.pause()
+        playerManager.pause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        player?.release()
-        player = null
+        binding.tvChannelName.removeCallbacks(hideNameRunnable)
+        playerManager.release()
     }
 
     private fun hideSystemUI() {

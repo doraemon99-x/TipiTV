@@ -7,6 +7,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import id.tipime.tv.data.model.Playlist
 import id.tipime.tv.data.repository.PlaylistRepository
+import id.tipime.tv.util.PlaylistCache
 import kotlinx.coroutines.launch
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -27,8 +28,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _error.value = null
         viewModelScope.launch {
             repository.loadPlaylist()
-                .onSuccess {
-                    _playlist.value = it
+                .onSuccess { pl ->
+                    PlaylistCache.set(pl) // cache untuk PlayerActivity
+                    _playlist.value = pl
                     _loading.value = false
                 }
                 .onFailure {
